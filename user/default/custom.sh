@@ -102,6 +102,27 @@ echo "Enabling Chinese language..."
 grep -qxF 'CONFIG_LUCI_LANG_zh_Hans=y' .config || \
     echo 'CONFIG_LUCI_LANG_zh_Hans=y' >> .config
 
+# -------------------------------------------------
+# Apply Full Cone NAT (sonic-fullcone) patches
+# -------------------------------------------------
+echo "Applying Full Cone NAT (sonic-fullcone) patches..."
+rm -rf /tmp/sonic-fullcone
+if ! git clone --depth=1 https://github.com/mufeng05/openwrt-sonic-fullcone.git /tmp/sonic-fullcone; then
+    echo "ERROR: Failed to download sonic-fullcone!"; exit 1
+fi
+if ! bash /tmp/sonic-fullcone/add_sonic_fullcone.sh; then
+    echo "ERROR: Failed to apply sonic-fullcone patches!"; exit 1
+fi
+rm -rf /tmp/sonic-fullcone
+
+if ! ls target/linux/generic/hack-*/986-add-sonic-fullcone-to-nft.patch >/dev/null 2>&1; then
+    echo "ERROR: kernel patch not placed -- unsupported kernel version (need 6.6/6.12/6.18)!"
+    exit 1
+fi
+if [ ! -f package/network/config/firewall4/patches/001-sonic-fullcone.patch ]; then
+    echo "ERROR: firewall4 patch was not applied!"; exit 1
+fi
+echo "Full Cone NAT patches applied successfully."
 
 # -------------------------------------------------
 # Enable Aurora
