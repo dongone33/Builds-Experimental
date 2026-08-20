@@ -67,31 +67,31 @@ fi
 
 echo "Aurora theme configuration app installed successfully."
 
+# -------------------------------------------------
+# Install MosDNS (mosdns core + v2dat + luci-app-mosdns)
+# -------------------------------------------------
+echo "Installing latest MosDNS..."
+rm -rf package/mosdns
+if ! git clone --depth=1 https://github.com/sbwml/luci-app-mosdns.git package/mosdns; then
+    echo "ERROR: Failed to download MosDNS!"; exit 1
+fi
+for pkg in mosdns v2dat luci-app-mosdns; do
+    [ -f "package/mosdns/$pkg/Makefile" ] || { echo "ERROR: MosDNS component '$pkg' missing Makefile!"; exit 1; }
+done
+echo "MosDNS installed successfully."
 
 # -------------------------------------------------
-# Install latest HomeProxy
+# Install latest OpenClash
 # -------------------------------------------------
-
-echo "Installing latest HomeProxy..."
-
-rm -rf package/luci-app-homeproxy
-
-if ! git clone \
-    --depth=1 \
-    https://github.com/immortalwrt/homeproxy.git \
-    package/luci-app-homeproxy
-then
-    echo "ERROR: Failed to download HomeProxy!"
-    exit 1
+echo "Installing latest OpenClash..."
+rm -rf /tmp/openclash-src package/luci-app-openclash
+if ! git clone --depth=1 https://github.com/vernesong/OpenClash.git /tmp/openclash-src; then
+    echo "ERROR: Failed to download OpenClash!"; exit 1
 fi
-
-if [ ! -f package/luci-app-homeproxy/Makefile ]; then
-    echo "ERROR: HomeProxy was downloaded, but Makefile is missing!"
-    exit 1
-fi
-
-echo "HomeProxy installed successfully."
-
+mv /tmp/openclash-src/luci-app-openclash package/luci-app-openclash
+rm -rf /tmp/openclash-src
+[ -f package/luci-app-openclash/Makefile ] || { echo "ERROR: OpenClash missing Makefile!"; exit 1; }
+echo "OpenClash installed successfully."
 
 # -------------------------------------------------
 # Enable Chinese language
