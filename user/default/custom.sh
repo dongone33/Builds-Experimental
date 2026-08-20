@@ -103,27 +103,44 @@ grep -qxF 'CONFIG_LUCI_LANG_zh_Hans=y' .config || \
     echo 'CONFIG_LUCI_LANG_zh_Hans=y' >> .config
 
 # -------------------------------------------------
-# Apply Full Cone NAT (sonic-fullcone) patches
+# Install Turbo ACC (nft-fullcone), skip SFE
+# (Airoha NPU hardware offload already handles flow acceleration)
 # -------------------------------------------------
-echo "Applying Full Cone NAT (sonic-fullcone) patches..."
-rm -rf /tmp/sonic-fullcone
-if ! git clone --depth=1 https://github.com/mufeng05/openwrt-sonic-fullcone.git /tmp/sonic-fullcone; then
-    echo "ERROR: Failed to download sonic-fullcone!"; exit 1
-fi
-if ! bash /tmp/sonic-fullcone/add_sonic_fullcone.sh; then
-    echo "ERROR: Failed to apply sonic-fullcone patches!"; exit 1
-fi
-rm -rf /tmp/sonic-fullcone
+echo "Installing Turbo ACC (nft-fullcone, --no-sfe)..."
 
-if ! ls target/linux/generic/hack-*/986-add-sonic-fullcone-to-nft.patch >/dev/null 2>&1; then
-    echo "ERROR: kernel patch not placed -- unsupported kernel version (need 6.6/6.12/6.18)!"
-    exit 1
-fi
-if [ ! -f package/network/config/firewall4/patches/001-sonic-fullcone.patch ]; then
-    echo "ERROR: firewall4 patch was not applied!"; exit 1
-fi
-echo "Full Cone NAT patches applied successfully."
+# Remove any stale checkout to avoid the script's interactive overwrite prompt
+rm -rf package/turboacc
 
+if ! curl -sSL https://raw.githubusercontent.com/chenmozhijin/turboacc/luci/add_turboacc.sh -o /tmp/add_turboacc.sh; then
+    echo "ERROR: Failed to download add_turboacc.sh!"; exit 1
+fi
+
+if ! bash /tmp/add_turboacc.sh --no-sfe; then
+    echo "ERROR: Failed to install Turbo ACC (nft-fullcone)!"; exit 1
+fi
+rm -f /tmp/add_turboacc.sh
+
+[ -f package/turboacc/luci-app-turboacc/Makefile ] || { echo "ERROR: luci-app-turboacc missing Makefile!"; exit 1; }
+[ -d package/turboacc/nft-fullcone ] || { echo "ERROR: nft-fullcone package not installed!"; exit 1; }
+
+if ! ls target/linux/generic/hack-*/952-add-net-conntrack-events-support-multiple-registrant.patch >/dev/null 2>&1; then
+    echo "ERROR: 952 kernel patch not placed -- unsupported kernel version!"; exit 1
+fi
+# Sanity check: --no-sfe must NOT bring in the SFE-only kernel patches
+if ls target/linux/generic/hack-*/953-net-patch-linux-kernel-to-support-shortcut-fe.patch >/dev/null 2>&1; then
+    echo "ERROR: SFE patch 953 present even though --no-sfe was requested!"; exit 1
+fi
+echo "Turbo ACC (nft-fullcone) installed successfully."
+
+# -------------------------------------------------
+# Enable Turbo ACC (nft-fullcone)
+# -------------------------------------------------
+
+echo "Enabling Turbo ACC..."
+
+grep -qxF 'CONFIG_PACKAGE_luci-app-turboacc=y' .config || \
+    echo 'CONFIG_PACKAGE_luci-app-turboacc=y' >> .config
+    
 # -------------------------------------------------
 # Enable Aurora
 # -------------------------------------------------
