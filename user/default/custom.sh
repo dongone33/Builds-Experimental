@@ -103,34 +103,68 @@ grep -qxF 'CONFIG_LUCI_LANG_zh_Hans=y' .config || \
     echo 'CONFIG_LUCI_LANG_zh_Hans=y' >> .config
 
 # -------------------------------------------------
-# Install Turbo ACC (nft-fullcone), skip SFE
-# (Airoha NPU hardware offload already handles flow acceleration)
+# Install Turbo ACC (mufeng05 fork)
+# (The device's own hardware acceleration -- e.g. HNAT -- already
+#  handles flow acceleration, so turboacc's own "fastpath" engine
+#  is shipped disabled by default -- see the config override below)
 # -------------------------------------------------
-echo "Installing Turbo ACC (nft-fullcone, --no-sfe)..."
+echo "Installing Turbo ACC (mufeng05/turboacc)..."
 
 # Remove any stale checkout to avoid the script's interactive overwrite prompt
 rm -rf package/turboacc
 
-if ! curl -sSL https://raw.githubusercontent.com/chenmozhijin/turboacc/luci/add_turboacc.sh -o /tmp/add_turboacc.sh; then
+if ! curl -sSL https://raw.githubusercontent.com/mufeng05/turboacc/main/add_turboacc.sh -o /tmp/add_turboacc.sh; then
     echo "ERROR: Failed to download add_turboacc.sh!"; exit 1
 fi
 
-if ! bash /tmp/add_turboacc.sh --no-sfe; then
-    echo "ERROR: Failed to install Turbo ACC (nft-fullcone)!"; exit 1
+if ! bash /tmp/add_turboacc.sh; then
+    echo "ERROR: Failed to install Turbo ACC (mufeng05)!"; exit 1
 fi
 rm -f /tmp/add_turboacc.sh
 
 [ -f package/turboacc/luci-app-turboacc/Makefile ] || { echo "ERROR: luci-app-turboacc missing Makefile!"; exit 1; }
-[ -d package/turboacc/nft-fullcone ] || { echo "ERROR: nft-fullcone package not installed!"; exit 1; }
+[ -d package/turboacc/fullconenat-nft ] || { echo "ERROR: fullconenat-nft (nftables fullcone) package not installed!"; exit 1; }
+[ -d package/turboacc/fullconenat ] || { echo "ERROR: fullconenat (iptables fullcone) package not installed!"; exit 1; }
 
 if ! ls target/linux/generic/hack-*/952-add-net-conntrack-events-support-multiple-registrant.patch >/dev/null 2>&1; then
     echo "ERROR: 952 kernel patch not placed -- unsupported kernel version!"; exit 1
 fi
-# Sanity check: --no-sfe must NOT bring in the SFE-only kernel patches
-if ls target/linux/generic/hack-*/953-net-patch-linux-kernel-to-support-shortcut-fe.patch >/dev/null 2>&1; then
-    echo "ERROR: SFE patch 953 present even though --no-sfe was requested!"; exit 1
+echo "Turbo ACC (mufeng05) installed successfully."
+
+# -------------------------------------------------
+# Ship Turbo ACC with its acceleration ("fastpath")
+# engine disabled by default
+# -------------------------------------------------
+# mufeng05/turboacc consolidates all acceleration engines (native
+# Flow Offloading, MediaTek/Airoha HNAT, Shortcut-FE, QCA-NSS-ECM...)
+# behind a single "fastpath" option. On first boot, its uci-defaults
+# script auto-detects available kernel modules and enables one of
+# them -- which is exactly what fights with this device's own
+# hardware acceleration and forces a manual restart after every boot.
+#
+# We pre-seed /etc/config/turboacc with "global.set=1" so that the
+# on-device uci-defaults script sees the config as already
+# initialized and skips its auto-detection entirely, shipping with
+# fastpath="none" (the flow-offload/HNAT engine is OFF). Full-cone
+# NAT support (the reason turboacc was added in the first place)
+# stays enabled. Users can still turn fastpath on manually from
+# LuCI > Network > Turbo ACC if they ever want to test it.
+turboacc_default_config="package/turboacc/luci-app-turboacc/root/etc/config/turboacc"
+if [ ! -f "$turboacc_default_config" ]; then
+    echo "ERROR: default turboacc config not found at $turboacc_default_config!"; exit 1
 fi
-echo "Turbo ACC (nft-fullcone) installed successfully."
+
+cat > "$turboacc_default_config" <<-'EOF'
+config turboacc 'global'
+	option set '1'
+
+config turboacc 'config'
+	option fastpath 'none'
+	option fullcone '1'
+	option tcpcca 'cubic'
+EOF
+
+echo "Turbo ACC fastpath (flow-offload/HNAT engine) set to disabled by default."
 
 # -------------------------------------------------
 # Enable Turbo ACC (nft-fullcone)
