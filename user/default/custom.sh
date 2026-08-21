@@ -122,6 +122,23 @@ if ! bash /tmp/add_turboacc.sh; then
 fi
 rm -f /tmp/add_turboacc.sh
 
+# -------------------------------------------------
+# Fix: mufeng05/turboacc's add_turboacc.sh has no
+# "--no-sfe" switch (unlike other turboacc forks) --
+# it unconditionally drops shortcut-fe/fast-classifier
+# into package/turboacc/shortcut-fe. Combined with this
+# config's CONFIG_ALL_KMODS=y, that pulls
+# kmod-fast-classifier into the build by default, and it
+# fails to compile against this device's Airoha AN7581
+# kernel tree ("package/turboacc/shortcut-fe/shortcut-fe
+# failed to build").
+# We don't need it anyway -- the Airoha NPU already does
+# hardware flow offload, and we only want nft-fullcone --
+# so just remove the package before it can be built.
+# -------------------------------------------------
+echo "Removing turboacc's shortcut-fe (not needed, incompatible with this kernel tree)..."
+rm -rf package/turboacc/shortcut-fe
+
 [ -f package/turboacc/luci-app-turboacc/Makefile ] || { echo "ERROR: luci-app-turboacc missing Makefile!"; exit 1; }
 [ -d package/turboacc/fullconenat-nft ] || { echo "ERROR: fullconenat-nft (nftables fullcone) package not installed!"; exit 1; }
 [ -d package/turboacc/fullconenat ] || { echo "ERROR: fullconenat (iptables fullcone) package not installed!"; exit 1; }
