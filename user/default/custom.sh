@@ -132,6 +132,25 @@ fi
 echo "Turbo ACC (mufeng05) installed successfully."
 
 # -------------------------------------------------
+# Fix: the mufeng05/turboacc libnftnl patch adds a
+# new source file via Makefile.am but ships no
+# PKG_FIXUP, so OpenWrt tries to build from the
+# stale (un-regenerated) configure/Makefile.in and
+# fails with "package/libs/libnftnl failed to build".
+# Force autoreconf so the patched Makefile.am
+# actually takes effect.
+# -------------------------------------------------
+libnftnl_makefile="package/libs/libnftnl/Makefile"
+if [ ! -f "$libnftnl_makefile" ]; then
+    echo "ERROR: $libnftnl_makefile not found!"; exit 1
+fi
+if ! grep -q '^PKG_FIXUP:=autoreconf' "$libnftnl_makefile"; then
+    sed -i '/^include \$(INCLUDE_DIR)\/package\.mk/i PKG_FIXUP:=autoreconf' "$libnftnl_makefile"
+fi
+grep -q '^PKG_FIXUP:=autoreconf' "$libnftnl_makefile" || { echo "ERROR: failed to inject PKG_FIXUP:=autoreconf into libnftnl Makefile!"; exit 1; }
+echo "libnftnl PKG_FIXUP:=autoreconf applied."
+
+# -------------------------------------------------
 # Ship Turbo ACC with its acceleration ("fastpath")
 # engine disabled by default
 # -------------------------------------------------
